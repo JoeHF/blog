@@ -90,7 +90,7 @@
 <meta property="og:url" content="https://joehf.github.io/blog/2016/09/06/GFS详解/index.html">
 <meta property="og:site_name" content="houfang的博客">
 <meta property="og:description" content="GFS也就是Google File System，以前断断续续也读过很多次了，自认为还是比较了解这个系统，可是当我来到蚂蚁金服Oceanbase团队让我重读这篇论文时，才发现以前对这篇论文的理解真是一知半解，三个月的实习结束回到学校，借着这个机会把经典论文重新仔细的重读一遍，并且萌生出写博客的想法，以前一直很懒惰不愿意静下来写字，其实这是很不好的习惯，当你把想法和问题落实成文字，理解会更加深刻，并">
-<meta property="og:updated_time" content="2016-09-06T03:28:51.000Z">
+<meta property="og:updated_time" content="2016-09-06T04:06:11.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="GFS详解">
 <meta name="twitter:description" content="GFS也就是Google File System，以前断断续续也读过很多次了，自认为还是比较了解这个系统，可是当我来到蚂蚁金服Oceanbase团队让我重读这篇论文时，才发现以前对这篇论文的理解真是一知半解，三个月的实习结束回到学校，借着这个机会把经典论文重新仔细的重读一遍，并且萌生出写博客的想法，以前一直很懒惰不愿意静下来写字，其实这是很不好的习惯，当你把想法和问题落实成文字，理解会更加深刻，并">
@@ -298,6 +298,12 @@
         <p>GFS也就是Google File System，以前断断续续也读过很多次了，自认为还是比较了解这个系统，可是当我来到蚂蚁金服Oceanbase团队让我重读这篇论文时，才发现以前对这篇论文的理解真是一知半解，三个月的实习结束回到学校，借着这个机会把经典论文重新仔细的重读一遍，并且萌生出写博客的想法，以前一直很懒惰不愿意静下来写字，其实这是很不好的习惯，当你把想法和问题落实成文字，理解会更加深刻，并且这些东西不会随着时间的过去而被遗忘，比如以前读过的论文只知道个大概的框架，当深挖细节时缺说不出个所以然来。这篇博客是我读<a href="http://static.googleusercontent.com/media/research.google.com/zh-CN//archive/gfs-sosp2003.pdf" target="_blank" rel="external">论文原文</a>以及一篇解析GFS的<a href="http://computer.howstuffworks.com/internet/basics/google-file-system.htm" target="_blank" rel="external">博客</a>提取出来的一些关键问题，有我的部分理解，也有我目前仍然有的疑问，欢迎大家指证。</p>
 <a id="more"></a>
 <h2 id="设计思想"><a href="#设计思想" class="headerlink" title="设计思想"></a>设计思想</h2><p>Google使用GFS来管理和操作大量文件，GFS并没有开源，它是Googlen内部工具，不过GFS的设计思想缺成为了设计文件系统的模型。一些GFS的设计细节对于Google外部人来说仍然是个迷，比如说我们并不知道Google使用了多少台电脑来承载GFS，论文只是提到几千台，不过Google仍然提供了大量GFS的结构和操作，我们接下来看看GFS到底是怎么做的。</p>
+<h3 id="追加写还是重写"><a href="#追加写还是重写" class="headerlink" title="追加写还是重写"></a>追加写还是重写</h3><blockquote>
+<p>GFS团队用追加写而不是重写来优化性能，这是因为Google里的用户极少使用覆盖重写而一般会使用追加写，不过在GFS里面仍然支持重写，不过系统对于这部分处理的效率并不高。</p>
+</blockquote>
+<p>Google里的开发者通常会操作大文件，这是传统文件系统无法处理的，所以他们会选择GFS，另外一个选择GFS的原因是它的可伸缩性，它意味着能够轻松地增加系统的容量，并且随着容量的提升系统的性能不会受到影响。</p>
+<p>网络体量是巨大的，因此监控和维护这个系统是一个有挑战的任务，开发GFS的程序员决定让管理维护系统的职责尽可能地自动化，这是一个重要的原则：自动化计算，意味着程序能自己检测故障，并且实时地恢复而无需人为干预。所以设计的关键在于简化，因为越复杂的系统故障的几率就会更大，简单的设计更容易控制即使系统规模扩展到很大。</p>
+<p>基于这样的设计哲学，GFS提供open，create，read，write和close文件的操作，设计团队同时还提供一对特殊的操作：append和snapshot。append允许用户给已经存在的文件条件信息而不会去覆盖已有的数据，snapshot用来给系统创建一个快速的备份。</p>
 
       
     </div>
@@ -436,7 +442,7 @@
               
             
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#设计思想"><span class="nav-number">1.</span> <span class="nav-text">设计思想</span></a></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#设计思想"><span class="nav-number">1.</span> <span class="nav-text">设计思想</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#追加写还是重写"><span class="nav-number">1.1.</span> <span class="nav-text">追加写还是重写</span></a></li></ol></li></ol></div>
             
           </div>
         </section>
