@@ -90,7 +90,7 @@
 <meta property="og:url" content="https://joehf.github.io/blog/2016/09/06/GFS详解/index.html">
 <meta property="og:site_name" content="houfang的博客">
 <meta property="og:description" content="GFS也就是Google File System，以前断断续续也读过很多次了，自认为还是比较了解这个系统，可是当我来到蚂蚁金服Oceanbase团队让我重读这篇论文时，才发现以前对这篇论文的理解真是一知半解，三个月的实习结束回到学校，借着这个机会把经典论文重新仔细的重读一遍，并且萌生出写博客的想法，以前一直很懒惰不愿意静下来写字，其实这是很不好的习惯，当你把想法和问题落实成文字，理解会更加深刻，并">
-<meta property="og:updated_time" content="2016-09-06T04:06:11.000Z">
+<meta property="og:updated_time" content="2016-09-07T09:39:54.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="GFS详解">
 <meta name="twitter:description" content="GFS也就是Google File System，以前断断续续也读过很多次了，自认为还是比较了解这个系统，可是当我来到蚂蚁金服Oceanbase团队让我重读这篇论文时，才发现以前对这篇论文的理解真是一知半解，三个月的实习结束回到学校，借着这个机会把经典论文重新仔细的重读一遍，并且萌生出写博客的想法，以前一直很懒惰不愿意静下来写字，其实这是很不好的习惯，当你把想法和问题落实成文字，理解会更加深刻，并">
@@ -304,6 +304,45 @@
 <p>Google里的开发者通常会操作大文件，这是传统文件系统无法处理的，所以他们会选择GFS，另外一个选择GFS的原因是它的可伸缩性，它意味着能够轻松地增加系统的容量，并且随着容量的提升系统的性能不会受到影响。</p>
 <p>网络体量是巨大的，因此监控和维护这个系统是一个有挑战的任务，开发GFS的程序员决定让管理维护系统的职责尽可能地自动化，这是一个重要的原则：自动化计算，意味着程序能自己检测故障，并且实时地恢复而无需人为干预。所以设计的关键在于简化，因为越复杂的系统故障的几率就会更大，简单的设计更容易控制即使系统规模扩展到很大。</p>
 <p>基于这样的设计哲学，GFS提供open，create，read，write和close文件的操作，设计团队同时还提供一对特殊的操作：append和snapshot。append允许用户给已经存在的文件条件信息而不会去覆盖已有的数据，snapshot用来给系统创建一个快速的备份。</p>
+<p>GFS上的文件非常大，传输文件耗费大量的带宽，GFS解决大文件的方法是将文件切分成64MB的chunk，每个chunk由一个64bit的chunk handle标识，由于GFS能够处理小文件，因此客户端无需优化大文件的读取。</p>
+<blockquote>
+<p>GFS选择64MB相对比较大的chunk大小能够带来的三个好处，一是能够减少client和master的通信，因为GFS的使用场景是连续的读写大文件，即使是小的随机读，因为客户端有缓存，因为一个缓存块对应64MB，所以缓存的利用率相对较高，能够缓存几乎所有的chunk信息，二是因为chunk大小比较大，对同一个chunk的频繁操作，通过维持相对更长时间的TCP连接来降低网络的开销，三是减小了元数据的大小，使得元数据能存放在内存中。一个相对较大的chunk不会成为一个热点，这是因为GFS的目标用户使用的是大文件而非小文件。（事实上GFS曾经出现过热点，数千台机器同时加载一个chunk里的可执行文件，解决方案是增加备份等级）</p>
+</blockquote>
+<p>为了使得所有节点的文件chunks数尽可能一致，GFS简化了资源分配，由于容易知道系统中的机器是否已经容量接近已满或者机器容量还没有被完全利用，所以chunk的负载均衡是容易实现的。</p>
+<h3 id="共享负载"><a href="#共享负载" class="headerlink" title="共享负载"></a>共享负载</h3><blockquote>
+<p>分布式计算是将各个机器通过网络串联在一起从而以统一的方式利用它们各自的资源，每个机器都会贡献它的资源（内存，处理器），对外界来说整个网络就好像一个巨大的机器，由各个机器来提供计算性能以及存储容量。</p>
+</blockquote>
+<p>从角色划分来看，一个GFS集群由三个实体组成：client, master servers, chunkservers。</p>
+<p>client发起一个文件请求，请求可能是读取或操作一个已有的文件，也可以是创建一个新的文件，client可以理解为GFS的用户。</p>
+<p>master servers是集群的协调器，master的职责是记录操作日志（operation log），操作日志将服务中断的影响降到最低——如果master servers挂掉，备份了操作日志的备机能够接替master的职责，master server同样存储了元信息，元信息描述了chunks和files的namespace，元信息能够告诉master server chunks属于哪个文件以及文件到chunks的映射，这些元数据都存在内存中，同时namespace和file到chunks的映射还要持久化到磁盘，在master刚启动的时候，master会轮询chunkserver，chunkserver回复master server他们的内容（chunks），从那刻起，master server能够追踪集群中所有chunck的位置。</p>
+<blockquote>
+<p>这里其实还有一个非常重要的概念——version，元数据还会存储chunk对应的version，这是用来辨别过期的chunk备份，当一个chunkserver宕机错过了chunk的升版本，这意味着它所持有的chunk数据是过期的。什么时候更新version呢，这个是需要当master授权租约给主chunk时，master更新内存里保存的chunk的version，并且通知所有的chunkserver升版本，master以及chunk副本都需要将这个新的chunk版本号持久化（这里OB的师兄曾经提到如果master持久化所有chunk的version开销会太大，这里我觉得似乎master没有必要保存chunk的version，因为如果一旦master宕机，那么重启的时候会向所有chunkserver询问chunk信息，这个时候同时询问chunk版本号即可，而chunkserver的版本号则必须持久化），在这一切结束之后client才能在这个chunk写数据。chunkserver重启会向master汇报，这个时候能够定位过期的chunk。master宕机重启之后向所有chunkserver拉取chunk信息时也可能会看到比自己持久化的chunk version要高的情况，这种情况发生在master授权租约时出现故障，在master持久化version信息之前宕机，这种情况下master要更新自己的version信息。</p>
+</blockquote>
+<p>一个时刻集群中只有一个master server（尽管每个进群都会有若干master的备份），听上去一个master会成为性能的瓶颈，为了解决单点性能瓶颈问题，GFS将master发送以及接收的信息量降到最低，master并不会操作文件数据，它将这个任务留给了chunckserver。</p>
+<p>chunkserver是集群中的workhorses，他们负责存储64MB chunk，chunkserver不会将chunck发送给master，而是直接将数据发送给client，GFS会将同一个chunck复制多个副本存储在别的机器，默认情况下GFS每个chunk存储三个副本，用户也可以更改这个配置。</p>
+<h3 id="GFS使用哪个副本"><a href="#GFS使用哪个副本" class="headerlink" title="GFS使用哪个副本"></a>GFS使用哪个副本</h3><blockquote>
+<p>GFS将副本区别为主副本和次要副本，主副本是chucnkserver发送给client的副本，次要副本的作用是备份.如果client修改了chunk数据，那么master会告诉次要副本从主副本拷贝新的chunk。</p>
+</blockquote>
+<p>文件请求有一套标准的工作流程。读请求相对容易，client发送请求到master，master告诉client响应的chunk对应的主副本的位置，主副本会拿着master给他个租约。</p>
+<p>如果当前没有一个副本拿着租约，master会委任一个chunk作为主副本通过比较client ip以及chunk所在的chunkserver的ip，之后client直接联系相应的chunkserver。</p>
+<p>写操作会稍微复杂一点，client发送写请求到master，master回复主副本以及次要副本的位置，client在缓存中存储这些信息，因此后续对于同一个chunk副本的请求将会绕过master，如果主副本不可达，或者副本改变，client会再次询问master副本的位置。</p>
+<p>client之后会发送数据到所有副本，从最近的副本位置开始，最近的副本是主副本还是次要副本并不重要。</p>
+<p>副本收到数据之后，主副本开始决定对自己数据的操作顺序，然后发送写请求到次要副本，使得次要副本的执行顺序相同，如果没有问题，那么所有副本都合并了新的数据，次要副本结束复制之后报告回给主副本。</p>
+<p>如果有一个次要副本对于某一个操作失败了，主副本会通知客户端并重试该操作若干次，如果次要副本没有正确更新数据，主副本会告诉次要副本从写操作的最开始重做，如果还是不起作用，那么master将会定位该副本为garbage。</p>
+<blockquote>
+<p>为了保证各副本内容一致，除了让主副本规定执行顺序，还需要version的保障，如果在写入的时候发现某个副本的版本号不一致，则不会在该副本上执行任何操作因为这个副本可能已经丢失了数据，master之后也不会再给client回复该chunk副本的位置。垃圾回收之后会回收掉这个chunk副本。但是由于client缓存的存在，client仍然可能读到一个过期副本的位置，论文里面说是通过控制缓存的超时时间以及下一次打开文件的时间来控制，但是这里具体的做法论文没有提到（谁来帮我理解一下这里？？）。由于client大量的操作是append，所以即使是过期副本client也只会读到数据偏少，而不会读取到错误的数据，当client重试去master获取chunk位置时将不会拿到这个过期chunk的位置了。（这里在加入一些我个人的理解，因为一个副本因为宕机重启，如果它报告master的chunk版本没有升，而实际上在它宕机期间又确实发生了数据的新写入，这个错误是检测不到的，所以我们必须要保证租约的过期时间不能比宕机重启的时间更长）</p>
+</blockquote>
+<h3 id="大文件怎么办？"><a href="#大文件怎么办？" class="headerlink" title="大文件怎么办？"></a>大文件怎么办？</h3><blockquote>
+<p>如果client创建了一个写操作跨越了多个chunk，GFS将写操作切分成多个chunk的写操作（论文原文是一次append不超过chunk大小的四分之一），剩下的操作和普通append没有区别。</p>
+</blockquote>
+<p>由于GFS构建于相对廉价的机器上，因此硬件出错的几率较高，GFS针对于这种硬件环境构建了一套机制包括master和chunk备份，流式地恢复进程，负载均衡，过期副本检测，垃圾回收和checksum。</p>
+<p>尽管GFS只有一个active的master，master副本在主master还没有下线的时候也能够提供有限的服务，这些服务限制在读操作，因为这些操作并不会修改数据，master副本通常会落后一点于主副本，通常只有几毫秒，master副本会和主master保持通信，跟踪其操作日志，从chunkserver拉取chunk信息，如果主master下线并且不能重启那么master副本将接替master。</p>
+<p>GFS复制chunk来保证即使硬件出错的时候数据仍然是完整的，通过将数据存储在不同机架上的机器，这样即使一个机架出错，数据仍然能够访问，GFS用独一的chunk标识符来标识chunk是有效的，如果一个副本的标识符和chunk的标识符不一致，那么master就会创建一个新的副本给chunkserver。</p>
+<p>master还会监控集群并且周期性地做负载均衡通过移动chunk从一个chunkserver到另外一个，所有的chunkserver保持一个接近的容量，但是不会让容量满，master还会监控chunk的备份是否是最新的，如果备份和chunk的标识符不一致，那么这个chunk备份就是一个过期的备份，三天之后master会删除这些垃圾的chunk。</p>
+<p>为了防止数据损坏，GFS用了checksum，系统将64MBchunk切分为64KB的block，每个block都有一个32bit的checksum，master通过checksum监控各个chunk，如果副本的checksum和master内存里的checksum不匹配，master也会删除这个副本并且创造一个新的副本取代它。如同其他元信息，checksum和用户数据分开，checksum保存在内存并且同时持久化到硬盘中。读操作时，chunkserver计算读的区域的checksum，如果出错则通知client错误并且报告错误给master，为了降低计算checksum开销，client将读操作按照checksum块对齐。master也会周期性地扫描非活跃chunk的checksum以保证数据的正确性。</p>
+<h3 id="心跳和握手"><a href="#心跳和握手" class="headerlink" title="心跳和握手"></a>心跳和握手</h3><blockquote>
+<p>GFS通过心跳和握手来维持系统更新，这些短的信息使得master和chunkserver状态保持最新。</p>
+</blockquote>
 
       
     </div>
@@ -442,7 +481,7 @@
               
             
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#设计思想"><span class="nav-number">1.</span> <span class="nav-text">设计思想</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#追加写还是重写"><span class="nav-number">1.1.</span> <span class="nav-text">追加写还是重写</span></a></li></ol></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#设计思想"><span class="nav-number">1.</span> <span class="nav-text">设计思想</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#追加写还是重写"><span class="nav-number">1.1.</span> <span class="nav-text">追加写还是重写</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#共享负载"><span class="nav-number">1.2.</span> <span class="nav-text">共享负载</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#GFS使用哪个副本"><span class="nav-number">1.3.</span> <span class="nav-text">GFS使用哪个副本</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#大文件怎么办？"><span class="nav-number">1.4.</span> <span class="nav-text">大文件怎么办？</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#心跳和握手"><span class="nav-number">1.5.</span> <span class="nav-text">心跳和握手</span></a></li></ol></li></ol></div>
             
           </div>
         </section>
