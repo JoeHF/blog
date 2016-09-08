@@ -90,7 +90,7 @@
 <meta property="og:url" content="https://joehf.github.io/blog/2016/09/06/GFS详解/index.html">
 <meta property="og:site_name" content="houfang的博客">
 <meta property="og:description" content="GFS也就是Google File System，以前断断续续也读过很多次了，自认为还是比较了解这个系统，可是当我来到蚂蚁金服Oceanbase团队让我重读这篇论文时，才发现以前对这篇论文的理解真是一知半解，三个月的实习结束回到学校，借着这个机会把经典论文重新仔细的重读一遍，并且萌生出写博客的想法，以前一直很懒惰不愿意静下来写字，其实这是很不好的习惯，当你把想法和问题落实成文字，理解会更加深刻，并">
-<meta property="og:updated_time" content="2016-09-07T10:52:16.000Z">
+<meta property="og:updated_time" content="2016-09-07T11:31:49.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="GFS详解">
 <meta name="twitter:description" content="GFS也就是Google File System，以前断断续续也读过很多次了，自认为还是比较了解这个系统，可是当我来到蚂蚁金服Oceanbase团队让我重读这篇论文时，才发现以前对这篇论文的理解真是一知半解，三个月的实习结束回到学校，借着这个机会把经典论文重新仔细的重读一遍，并且萌生出写博客的想法，以前一直很懒惰不愿意静下来写字，其实这是很不好的习惯，当你把想法和问题落实成文字，理解会更加深刻，并">
@@ -330,14 +330,17 @@
 <p>如果当前没有一个副本拿着租约，master会委任一个chunk作为主副本通过比较client ip以及chunk所在的chunkserver的ip，之后client直接联系相应的chunkserver。</p>
 <p>写操作会稍微复杂一点，client发送写请求到master，master回复主副本以及次要副本的位置，client在缓存中存储这些信息，因此后续对于同一个chunk副本的请求将会绕过master，如果主副本不可达，或者副本改变，client会再次询问master副本的位置。</p>
 <p>client之后会发送数据到所有副本，从最近的副本位置开始，最近的副本是主副本还是次要副本并不重要。</p>
+<blockquote>
+<p>如果一个写请求太大超过了这个chunk的边界，client会将请求切分，仍然遵循数据流和控制流向chunk各副本写数据，这时候如果是并发写，可能会出现写入数据不是defined，尽管在各个副本上的数据是一致的。</p>
+</blockquote>
 <p>副本收到数据之后，主副本开始决定对自己数据的操作顺序，然后发送写请求到次要副本，使得次要副本的执行顺序相同，如果没有问题，那么所有副本都合并了新的数据，次要副本结束复制之后报告回给主副本。</p>
-<p>如果有一个次要副本对于某一个操作失败了，主副本会通知客户端并重试该操作若干次，如果次要副本没有正确更新数据，主副本会告诉次要副本从写操作的最开始重做，如果还是不起作用，那么master将会定位该副本为garbage。</p>
+<p>如果有一个次要副本对于某一个操作失败了，主副本会通知客户端并重试该操作若干次，如果次要副本没有正确更新数据，主副本会告诉次要副本从写操作的最开始重做，如果还是不起作用，那么master将会定位该副本为garbage。主副本不会写入失败，因为如果主副本写入失败则不会定序发送给备用副本。</p>
 <blockquote>
 <p>为了保证各副本内容一致，除了让主副本规定执行顺序，还需要version的保障，如果在写入的时候发现某个副本的版本号不一致，则不会在该副本上执行任何操作因为这个副本可能已经丢失了数据，master之后也不会再给client回复该chunk副本的位置。垃圾回收之后会回收掉这个chunk副本。但是由于client缓存的存在，client仍然可能读到一个过期副本的位置，论文里面说是通过控制缓存的超时时间以及下一次打开文件的时间来控制，但是这里具体的做法论文没有提到（谁来帮我理解一下这里？？）。由于client大量的操作是append，所以即使是过期副本client也只会读到数据偏少，而不会读取到错误的数据，当client重试去master获取chunk位置时将不会拿到这个过期chunk的位置了。（这里在加入一些我个人的理解，因为一个副本因为宕机重启，如果它报告master的chunk版本没有升，而实际上在它宕机期间又确实发生了数据的新写入，这个错误是检测不到的，所以我们必须要保证租约的过期时间不能比宕机重启的时间更长）</p>
 </blockquote>
 <p><strong>大文件怎么办</strong></p>
 <blockquote>
-<p>如果client创建了一个写操作跨越了多个chunk，GFS将写操作切分成多个chunk的写操作（论文原文是一次append不超过chunk大小的四分之一），剩下的操作和普通append没有区别。</p>
+<p>如果client创建了一个写操作跨越了多个chunk，GFS将写操作切分成多个chunk的写操作（论文原文是一次append不超过chunk大小的四分之一），剩下的操作和普通append没有区别。如果一次append操作超过当前chunk的边界，主chunk会告诉client会在新chunk中添加数据，并在原来的chunk末尾添加padding。</p>
 </blockquote>
 <h2 id="其他GFS功能"><a href="#其他GFS功能" class="headerlink" title="其他GFS功能"></a>其他GFS功能</h2><p>由于GFS构建于相对廉价的机器上，因此硬件出错的几率较高，GFS针对于这种硬件环境构建了一套机制包括master和chunk备份，流式地恢复进程，负载均衡，过期副本检测，垃圾回收和checksum。</p>
 <p>尽管GFS只有一个active的master，master副本在主master还没有下线的时候也能够提供有限的服务，这些服务限制在读操作，因为这些操作并不会修改数据，master副本通常会落后一点于主副本，通常只有几毫秒，master副本会和主master保持通信，跟踪其操作日志，从chunkserver拉取chunk信息，如果主master下线并且不能重启那么master副本将接替master。</p>
@@ -445,7 +448,7 @@
       <section class="site-overview sidebar-panel ">
         <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
           <img class="site-author-image" itemprop="image"
-               src="/blog/images/avatar.jpg"
+               src="/blog/images/tangbao.jpg"
                alt="houfang" />
           <p class="site-author-name" itemprop="name">houfang</p>
           <p class="site-description motion-element" itemprop="description"></p>
