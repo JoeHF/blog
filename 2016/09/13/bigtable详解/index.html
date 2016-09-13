@@ -92,7 +92,7 @@
 <meta property="og:description" content="概要Bigtable是存储结构化数据的分布式存储系统，它能适应非常大的规模，用商用服务器存储petabytes的数据。Bigtable并没有支持全关系的数据模型，它提供给客户端自己去组织局部性，数据是通过行和列进行索引，Bigtable table schema还能够让客户端动态去控制数据是否要缓存在内存里面。">
 <meta property="og:image" content="https://joehf.github.io/blog/blog/images/row_column.jpg">
 <meta property="og:image" content="https://joehf.github.io/blog/blog/images/tablet_location_hierarchy.png">
-<meta property="og:updated_time" content="2016-09-13T09:16:35.000Z">
+<meta property="og:updated_time" content="2016-09-13T15:38:34.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="bigtable详解">
 <meta name="twitter:description" content="概要Bigtable是存储结构化数据的分布式存储系统，它能适应非常大的规模，用商用服务器存储petabytes的数据。Bigtable并没有支持全关系的数据模型，它提供给客户端自己去组织局部性，数据是通过行和列进行索引，Bigtable table schema还能够让客户端动态去控制数据是否要缓存在内存里面。">
@@ -308,8 +308,15 @@
 <h3 id="列族"><a href="#列族" class="headerlink" title="列族"></a>列族</h3><p>column keys集合成列族，同一个列族有相同的访问控制，压缩算法是将一个列族里的数据都进行统一压缩，访问控制允许多个应用管理不同类型的数据，比如有的添加基础数据，有的读基础数据，有的创建一个新的列族</p>
 <h3 id="时间戳"><a href="#时间戳" class="headerlink" title="时间戳"></a>时间戳</h3><p>Bigtable每个单元都能够保存同一个数据的多个版本，这些版本通过时间戳进行索引，不同版本的数据按照降序排列，客户端决定各个列族保留多少个副本以便于进行垃圾回收</p>
 <h2 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h2><p>Bigtable实现由三个主要部件构成，一个连接到每个客户端的库，一个master server，许多tablet server。Tablet server动态添加和减少以适应集群工作集的变化。master负责将tablet分配给tablet server，监测添加和移除tablet server，调整tablet server负载，负责垃圾回收，还要负责管理schema。tablet server负责处理tablet的读写请求，并且负责tablet的分裂。客户端的请求不会和master打交道去获取tablets的位置信息，因此master的负载很轻。<br>一个Bigtable集群存储很多表，每个表由一系列的tablets构成，每个tablet保存一个row范围的数据，初始每个表只有一个tablet，随着表的增大，tablet会分裂，通常tablet大小会在100-200MB左右。</p>
-<h3 id="Tablet位置"><a href="#Tablet位置" class="headerlink" title="Tablet位置"></a>Tablet位置</h3><p>我们使用三层的B+树存储tablet位置<br><img src="/blog/images/tablet_location_hierarchy.png" class="left" width="385" height="241" title="tablet存储层次"><br>第一级文件存储在chubby，称为root tablet，METADATA表包括了所有的tablets的位置信息，每一个METADATA tablet包括一部分用户tablet的位置，root tablet只是METADATA表的第一个tablet而已。但是root tablet的处理会比较特殊，他不会分裂以保证三层次的模型。METADATA表根据tablet所在table的标识以及这个tablet最后一个rowkey来定位一个tablet，METADATA的一行大约占据1KB的内存空间，加入tablet的大小范围是128MB，那么我们三层的结构一共能够索引$2^{34}$个tablet，如果在算上每个tablet有128MB，那么支持的数据量达到$2^{61}$个字节。<br>客户端会缓存tablet位置，如果客户端没有缓存或者缓存失效，那么需要遍历tablet位置结构，如果缓存没有，那么需要三次网络请求，包括一次向chubby的读，如果缓存是旧的，则需要六次网络请求，因为tablet位置的metadata数据都缓存在内存中，所以metadata的读不会涉及到GFS。还可以通过客户端预取tablet位置来优化性能。</p>
-<h3 id="Tablet分配"><a href="#Tablet分配" class="headerlink" title="Tablet分配"></a>Tablet分配</h3>
+<h3 id="Tablet位置"><a href="#Tablet位置" class="headerlink" title="Tablet位置"></a>Tablet位置</h3><p>我们使用三层的B+树存储tablet位置<br><img src="/blog/images/tablet_location_hierarchy.png" class="left" width="385" height="241" title="tablet存储层次"><br>第一级文件存储在chubby，称为root tablet，METADATA表包括了所有的tablets的位置信息，每一个METADATA tablet包括一部分用户tablet的位置，root tablet只是METADATA表的第一个tablet而已。但是root tablet的处理会比较特殊，他不会分裂以保证三层次的模型。METADATA表根据tablet所在table的标识以及这个tablet最后一个rowkey来定位一个tablet，METADATA的一行大约占据1KB的内存空间，加入tablet的大小范围是128MB，那么我们三层的结构一共能够索引$2^{34}$个tablet，如果在算上每个tablet有128MB，那么支持的数据量达到$2^{61}$个字节。</p>
+<p>客户端会缓存tablet位置，如果客户端没有缓存或者缓存失效，那么需要遍历tablet位置结构，如果缓存没有，那么需要三次网络请求，包括一次向chubby的读，如果缓存是旧的，则需要六次网络请求，因为tablet位置的metadata数据都缓存在内存中，所以metadata的读不会涉及到GFS。还可以通过客户端预取tablet位置来优化性能。</p>
+<h3 id="Tablet分配"><a href="#Tablet分配" class="headerlink" title="Tablet分配"></a>Tablet分配</h3><p>每一个tablet分配给一个tablet server，master负责跟踪活跃的tablet server，还有当前已经被分配的tablet以及还未被分配的tablet，当有一个tablet还未被分配时，如果一个tablet server有足够的空间，那么master会把这个tablet负载发送给该tablet server</p>
+<p>Bigtable用chubby来跟踪tablet server，tablet server启动时会去chubby获得一个特定chubby目录下的唯一名字文件的排它锁，master通过监控这个目录下的文件来监控tablet server，如果因为网络原因tablet server失去了和chubby的session，那么tablet server就会失去对应文件的排它锁。只要这个文件存在，那么tablet server会不断尝试获得锁，如果这个文件不存在，则这个tablet server不服务了，关闭自己。当集群管理员通知tablet setver下线，tablet server也会主动释放锁，这样master会重新分配tablet</p>
+<p>master会周期性地询问tablet server是否还持有锁，如果tablet server报告他失去锁或者master经过几次尝试都没有联系到tablet server，master就要去chubby试图获得锁，如果能获得锁说明chubby还在服务，tablet server要么挂了要么联系不到chubby，因此master判断tablet server无法继续服务并删除其对应的chubby文件，删除文件之后，原本分配给该tablet server的tablet变为未分配状态。而master一旦失去和chubby的连接也立刻关闭自己，因此master失败不会改变tablet的分配。</p>
+<p>master启动要发现tablet的分配，由下面四步构成：<br>1、master从chubby获得锁，防止并发的master试图获得锁<br>2、master扫描chubby下tablet server目录发现活的tablet server<br>3、master和每个活的tablet server通信发现分配给该tablet server的tablets<br>4、master扫描metadata表活的所有的tablet，如果遇到任何tablet是未分配的，移动到未分配tablet集合</p>
+<p>如果metadata tablet还未分配，那么对metadata的扫描无法进行，因此在扫描metadata前要先将root tablet加入到未分配tablet集合中以保证root tablet是分配的</p>
+<p>当前的tablets改变只会发生在创建、删除、合并、分裂，tablet分裂比较特殊，是由tablet server发起的，tablet server通过向metadata记录新的tablet来提交分裂，分裂结束后通知master，为了防止通知丢失，master向tablet server询问已分裂的tablet时能检测到分裂，因为metadata只记录了一部分master要求加载的tablet。</p>
+
       
     </div>
 
