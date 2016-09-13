@@ -68,7 +68,7 @@
 <link href="/blog/css/main.css?v=5.0.1" rel="stylesheet" type="text/css" />
 
 
-  <meta name="keywords" content="Hexo, NexT" />
+  <meta name="keywords" content="经典论文," />
 
 
 
@@ -84,16 +84,19 @@
 
 
 
-<meta name="description" content="Welcome to Hexo! This is your very first post. Check documentation for more info. If you get any problems when using Hexo, you can find the answer in troubleshooting or you can ask me on GitHub.">
+<meta name="description" content="概要Bigtable是存储结构化数据的分布式存储系统，它能适应非常大的规模，用商用服务器存储petabytes的数据。Bigtable并没有支持全关系的数据模型，它提供给客户端自己去组织局部性，数据是通过行和列进行索引，Bigtable table schema还能够让客户端动态去控制数据是否要缓存在内存里面。">
 <meta property="og:type" content="article">
-<meta property="og:title" content="Hello World">
-<meta property="og:url" content="https://joehf.github.io/blog/2016/09/03/hello-world/index.html">
+<meta property="og:title" content="bigtable详解">
+<meta property="og:url" content="https://joehf.github.io/blog/2016/09/13/bigtable详解/index.html">
 <meta property="og:site_name" content="houfang的博客">
-<meta property="og:description" content="Welcome to Hexo! This is your very first post. Check documentation for more info. If you get any problems when using Hexo, you can find the answer in troubleshooting or you can ask me on GitHub.">
-<meta property="og:updated_time" content="2016-09-06T03:28:44.000Z">
+<meta property="og:description" content="概要Bigtable是存储结构化数据的分布式存储系统，它能适应非常大的规模，用商用服务器存储petabytes的数据。Bigtable并没有支持全关系的数据模型，它提供给客户端自己去组织局部性，数据是通过行和列进行索引，Bigtable table schema还能够让客户端动态去控制数据是否要缓存在内存里面。">
+<meta property="og:image" content="https://joehf.github.io/blog/blog/images/row_column.jpg">
+<meta property="og:image" content="https://joehf.github.io/blog/blog/images/tablet_location_hierarchy.png">
+<meta property="og:updated_time" content="2016-09-13T09:16:35.000Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Hello World">
-<meta name="twitter:description" content="Welcome to Hexo! This is your very first post. Check documentation for more info. If you get any problems when using Hexo, you can find the answer in troubleshooting or you can ask me on GitHub.">
+<meta name="twitter:title" content="bigtable详解">
+<meta name="twitter:description" content="概要Bigtable是存储结构化数据的分布式存储系统，它能适应非常大的规模，用商用服务器存储petabytes的数据。Bigtable并没有支持全关系的数据模型，它提供给客户端自己去组织局部性，数据是通过行和列进行索引，Bigtable table schema还能够让客户端动态去控制数据是否要缓存在内存里面。">
+<meta name="twitter:image" content="https://joehf.github.io/blog/blog/images/row_column.jpg">
 
 
 
@@ -114,9 +117,9 @@
 
 
 
-  <link rel="canonical" href="https://joehf.github.io/blog/2016/09/03/hello-world/"/>
+  <link rel="canonical" href="https://joehf.github.io/blog/2016/09/13/bigtable详解/"/>
 
-  <title> Hello World | houfang的博客 </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
+  <title> bigtable详解 | houfang的博客 </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
 </head>
 
 <body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
@@ -236,7 +239,7 @@
             
             
               
-                Hello World
+                bigtable详解
               
             
           </h1>
@@ -248,11 +251,30 @@
               <i class="fa fa-calendar-o"></i>
             </span>
             <span class="post-meta-item-text">发表于</span>
-            <time itemprop="dateCreated" datetime="2016-09-03T09:34:04+08:00" content="2016-09-03">
-              2016-09-03
+            <time itemprop="dateCreated" datetime="2016-09-13T13:12:10+08:00" content="2016-09-13">
+              2016-09-13
             </time>
           </span>
 
+          
+            <span class="post-category" >
+              &nbsp; | &nbsp;
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+              
+                <span itemprop="about" itemscope itemtype="https://schema.org/Thing">
+                  <a href="/blog/categories/分布式系统/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+
+                
+                
+
+              
+            </span>
           
 
           
@@ -276,17 +298,18 @@
       
 
       
-        <p>Welcome to <a href="https://hexo.io/" target="_blank" rel="external">Hexo</a>! This is your very first post. Check <a href="https://hexo.io/docs/" target="_blank" rel="external">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="https://hexo.io/docs/troubleshooting.html" target="_blank" rel="external">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues" target="_blank" rel="external">GitHub</a>.</p>
-<a id="more"></a>
-<h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo new <span class="string">"My New Post"</span></div></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/writing.html" target="_blank" rel="external">Writing</a></p>
-<h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo server</div></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/server.html" target="_blank" rel="external">Server</a></p>
-<h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo generate</div></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/generating.html" target="_blank" rel="external">Generating</a></p>
-<h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo deploy</div></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/deployment.html" target="_blank" rel="external">Deployment</a></p>
-
+        <h2 id="概要"><a href="#概要" class="headerlink" title="概要"></a>概要</h2><p>Bigtable是存储结构化数据的分布式存储系统，它能适应非常大的规模，用商用服务器存储petabytes的数据。Bigtable并没有支持全关系的数据模型，它提供给客户端自己去组织局部性，数据是通过行和列进行索引，Bigtable table schema还能够让客户端动态去控制数据是否要缓存在内存里面。<br><a id="more"></a></p>
+<h2 id="数据模型"><a href="#数据模型" class="headerlink" title="数据模型"></a>数据模型</h2><p>Bigtable是一个稀疏的分布式的持久化的多维度有序map，map通过rowkey,column key和时间戳进行索引，每一个值都是无解释的字节数组</p>
+<blockquote>
+<p>(row:string, column:string, time:int64) -&gt; string</p>
+</blockquote>
+<img src="/blog/images/row_column.jpg" class="left" width="873" height="196" title="存储webpage示例">
+<h3 id="行"><a href="#行" class="headerlink" title="行"></a>行</h3><p>rowkey是一个字符串，长度最大可达64KB，通常10-100字节，对于同一rowkey的读写保证是原子性的，Bigtable是按照rowkey的字典序保存数据，行的范围是动态划分的，每一个行的范围称为一个tablet，tablet是复杂均衡的单位，因此读一个相对小范围rowkey的值是比较有效率的</p>
+<h3 id="列族"><a href="#列族" class="headerlink" title="列族"></a>列族</h3><p>column keys集合成列族，同一个列族有相同的访问控制，压缩算法是将一个列族里的数据都进行统一压缩，访问控制允许多个应用管理不同类型的数据，比如有的添加基础数据，有的读基础数据，有的创建一个新的列族</p>
+<h3 id="时间戳"><a href="#时间戳" class="headerlink" title="时间戳"></a>时间戳</h3><p>Bigtable每个单元都能够保存同一个数据的多个版本，这些版本通过时间戳进行索引，不同版本的数据按照降序排列，客户端决定各个列族保留多少个副本以便于进行垃圾回收</p>
+<h2 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h2><p>Bigtable实现由三个主要部件构成，一个连接到每个客户端的库，一个master server，许多tablet server。Tablet server动态添加和减少以适应集群工作集的变化。master负责将tablet分配给tablet server，监测添加和移除tablet server，调整tablet server负载，负责垃圾回收，还要负责管理schema。tablet server负责处理tablet的读写请求，并且负责tablet的分裂。客户端的请求不会和master打交道去获取tablets的位置信息，因此master的负载很轻。<br>一个Bigtable集群存储很多表，每个表由一系列的tablets构成，每个tablet保存一个row范围的数据，初始每个表只有一个tablet，随着表的增大，tablet会分裂，通常tablet大小会在100-200MB左右。</p>
+<h3 id="Tablet位置"><a href="#Tablet位置" class="headerlink" title="Tablet位置"></a>Tablet位置</h3><p>我们使用三层的B+树存储tablet位置<br><img src="/blog/images/tablet_location_hierarchy.png" class="left" width="385" height="241" title="tablet存储层次"><br>第一级文件存储在chubby，称为root tablet，METADATA表包括了所有的tablets的位置信息，每一个METADATA tablet包括一部分用户tablet的位置，root tablet只是METADATA表的第一个tablet而已。但是root tablet的处理会比较特殊，他不会分裂以保证三层次的模型。METADATA表根据tablet所在table的标识以及这个tablet最后一个rowkey来定位一个tablet，METADATA的一行大约占据1KB的内存空间，加入tablet的大小范围是128MB，那么我们三层的结构一共能够索引$2^{34}$个tablet，如果在算上每个tablet有128MB，那么支持的数据量达到$2^{61}$个字节。<br>客户端会缓存tablet位置，如果客户端没有缓存或者缓存失效，那么需要遍历tablet位置结构，如果缓存没有，那么需要三次网络请求，包括一次向chubby的读，如果缓存是旧的，则需要六次网络请求，因为tablet位置的metadata数据都缓存在内存中，所以metadata的读不会涉及到GFS。还可以通过客户端预取tablet位置来优化性能。</p>
+<h3 id="Tablet分配"><a href="#Tablet分配" class="headerlink" title="Tablet分配"></a>Tablet分配</h3>
       
     </div>
 
@@ -306,18 +329,24 @@
 
     <footer class="post-footer">
       
+        <div class="post-tags">
+          
+            <a href="/blog/tags/经典论文/" rel="tag">#经典论文</a>
+          
+        </div>
+      
 
       
         <div class="post-nav">
           <div class="post-nav-next post-nav-item">
             
+              <a href="/blog/2016/09/06/GFS详解/" rel="next" title="GFS详解">
+                <i class="fa fa-chevron-left"></i> GFS详解
+              </a>
+            
           </div>
 
           <div class="post-nav-prev post-nav-item">
-            
-              <a href="/blog/2016/09/06/GFS详解/" rel="prev" title="GFS详解">
-                GFS详解 <i class="fa fa-chevron-right"></i>
-              </a>
             
           </div>
         </div>
@@ -431,7 +460,7 @@
               
             
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Quick-Start"><span class="nav-number">1.</span> <span class="nav-text">Quick Start</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Create-a-new-post"><span class="nav-number">1.1.</span> <span class="nav-text">Create a new post</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Run-server"><span class="nav-number">1.2.</span> <span class="nav-text">Run server</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Generate-static-files"><span class="nav-number">1.3.</span> <span class="nav-text">Generate static files</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Deploy-to-remote-sites"><span class="nav-number">1.4.</span> <span class="nav-text">Deploy to remote sites</span></a></li></ol></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#概要"><span class="nav-number">1.</span> <span class="nav-text">概要</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#数据模型"><span class="nav-number">2.</span> <span class="nav-text">数据模型</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#行"><span class="nav-number">2.1.</span> <span class="nav-text">行</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#列族"><span class="nav-number">2.2.</span> <span class="nav-text">列族</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#时间戳"><span class="nav-number">2.3.</span> <span class="nav-text">时间戳</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#实现"><span class="nav-number">3.</span> <span class="nav-text">实现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Tablet位置"><span class="nav-number">3.1.</span> <span class="nav-text">Tablet位置</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Tablet分配"><span class="nav-number">3.2.</span> <span class="nav-text">Tablet分配</span></a></li></ol></li></ol></div>
             
           </div>
         </section>
