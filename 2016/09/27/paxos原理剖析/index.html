@@ -1,0 +1,622 @@
+<!doctype html>
+
+
+
+  
+
+
+<html class="theme-next muse use-motion">
+<head>
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/blog/vendors/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+  
+  
+  
+  
+
+  
+    
+    
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+    
+    
+    <link href="//fonts.googleapis.com/css?family=Lato:300,300italic,400,400italic,700,700italic&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+  
+
+
+
+
+
+
+<link href="/blog/vendors/font-awesome/css/font-awesome.min.css?v=4.4.0" rel="stylesheet" type="text/css" />
+
+<link href="/blog/css/main.css?v=5.0.1" rel="stylesheet" type="text/css" />
+
+
+  <meta name="keywords" content="经典论文," />
+
+
+
+
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/blog/favicon.ico?v=5.0.1" />
+
+
+
+
+
+
+<meta name="description" content="今年暑假在oceanbase实习，期间了解到paxos算法以及它的应用，最近面试的时候有的面试官也对paxos有所研究，由于过去两个月，paxos的过程及其证明被忘得差不多了，为了加深理解再重读paxos made simple这篇论文，记录下一些关键的要点。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="paxos原理剖析">
+<meta property="og:url" content="https://joehf.github.io/blog/2016/09/27/paxos原理剖析/index.html">
+<meta property="og:site_name" content="houfang的博客">
+<meta property="og:description" content="今年暑假在oceanbase实习，期间了解到paxos算法以及它的应用，最近面试的时候有的面试官也对paxos有所研究，由于过去两个月，paxos的过程及其证明被忘得差不多了，为了加深理解再重读paxos made simple这篇论文，记录下一些关键的要点。">
+<meta property="og:updated_time" content="2016-09-27T03:59:46.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="paxos原理剖析">
+<meta name="twitter:description" content="今年暑假在oceanbase实习，期间了解到paxos算法以及它的应用，最近面试的时候有的面试官也对paxos有所研究，由于过去两个月，paxos的过程及其证明被忘得差不多了，为了加深理解再重读paxos made simple这篇论文，记录下一些关键的要点。">
+
+
+
+<script type="text/javascript" id="hexo.configuration">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    scheme: 'Muse',
+    sidebar: {"position":"left","display":"post"},
+    fancybox: true,
+    motion: true,
+    duoshuo: {
+      userId: 0,
+      author: '博主'
+    }
+  };
+</script>
+
+
+
+
+  <link rel="canonical" href="https://joehf.github.io/blog/2016/09/27/paxos原理剖析/"/>
+
+  <title> paxos原理剖析 | houfang的博客 </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+
+
+
+
+
+
+
+
+
+
+  
+  
+    
+  
+
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><div class="container one-collumn sidebar-position-left page-post-detail ">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-meta ">
+  
+
+  <div class="custom-logo-site-title">
+    <a href="/blog/"  class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <span class="site-title">houfang的博客</span>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+  <p class="site-subtitle"></p>
+</div>
+
+<div class="site-nav-toggle">
+  <button>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+  </button>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/blog/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/blog/archives" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/blog/tags" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal " itemscope itemtype="http://schema.org/Article">
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+            
+            
+              
+                paxos原理剖析
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            <span class="post-meta-item-icon">
+              <i class="fa fa-calendar-o"></i>
+            </span>
+            <span class="post-meta-item-text">发表于</span>
+            <time itemprop="dateCreated" datetime="2016-09-27T09:25:23+08:00" content="2016-09-27">
+              2016-09-27
+            </time>
+          </span>
+
+          
+            <span class="post-category" >
+              &nbsp; | &nbsp;
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+              
+                <span itemprop="about" itemscope itemtype="https://schema.org/Thing">
+                  <a href="/blog/categories/分布式系统/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+
+                
+                
+
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+
+          
+          
+
+          
+        </div>
+      </header>
+    
+
+
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>今年暑假在oceanbase实习，期间了解到paxos算法以及它的应用，最近面试的时候有的面试官也对paxos有所研究，由于过去两个月，paxos的过程及其证明被忘得差不多了，为了加深理解再重读paxos made simple这篇论文，记录下一些关键的要点。</p>
+<a id="more"></a>
+<h2 id="一致性算法"><a href="#一致性算法" class="headerlink" title="一致性算法"></a>一致性算法</h2><h3 id="问题描述"><a href="#问题描述" class="headerlink" title="问题描述"></a>问题描述</h3><p>一系列的提议者他们都可以提出一个值（value），一致性算法保证只有一个提议能够被选中，如果没有提议，显然也就没有选中的value，如果一个value被选中，那么所有的提议者都需要学到（learn）这个值。一致性的安全性要求如下：<br>1、只有被提议的值才能被选中<br>2、只有一个值会被选中<br>3、提议者不会学到（learn）这个值被选中直到它确实被选中</p>
+<h3 id="选择一个值"><a href="#选择一个值" class="headerlink" title="选择一个值"></a>选择一个值</h3><p>最简单的方式是只有一个acceptor，acceptor接受它收到的第一个提议的值，问题也很明显，如果这个acceptor失败了，那么接下来的提议过程都会失败。</p>
+<p>不采用单一acceptor方式，我们采用多个acceptor，一个接受者能够接受一个提议，当大部分的接受者接受这个提议，那么这个提议就会被采纳，这个大部分也就是指的多数派。</p>
+<p>即使只有一个提议者提出值，那么这个值也需要被选中，于是有第一个命题</p>
+<blockquote>
+<p>P1 接受者必须接受它收到的第一个提议</p>
+</blockquote>
+<p>这会引出一个问题，如果提议者几乎在同一时刻发出一个提议，这会导致每个接受者都接受了一个不同的提议，导致没有一个提议获得多数派的支持，即使只有两个提议者提议，他们能够获得各一半的支持，一个接受者的宕机就可能导致永远无法学到一个值。</p>
+<p>P1和提议至少要被大部分接受才被接受的要求推导出接受者必须要能够接受多个提议，为了区别各个提议需要给提议定一个编号，因此提议由两部分构成（提议编号，提议值）</p>
+<p>我们允许接受者接受多个提议，但是我们必须要保证所有接受的提议是同一个提议，通过对提议号的归纳得到P2</p>
+<blockquote>
+<p>P2 如果一个提议值v被选中，那么一个更高序号的提议被选中，它的值也必定是v<br>由于序号是有序的，条件P2保证只有一个值能够被选中</p>
+</blockquote>
+<p>要被选中的话，一个提议要至少被一个接受者选中，所以我们通过满足下列条件来满足P2</p>
+<blockquote>
+<p>P2a 如果一个提议值v被选中，那么更高序号的提议被任何接受者接受的值也都是v</p>
+</blockquote>
+<p>我们仍然需要P1来保证至少有一个提议被选择，由于通信是异步的，一个提议能被一个接受者（c）接受如果c还没有收到任何提议，假设一个新的提议者醒过来（wake up）提出了一个更高的提议和一个不同的value，P1要求c去接受这个提议，于是违背了P2a，维持P1和P2a，我们需要加强P2a到P2b.</p>
+<blockquote>
+<p>P2b 如果一个提议值v被选中，那么提议者提出的更高的编号的提议值必须是v</p>
+</blockquote>
+<p>由于一个提议要被提出才能被接受，所以P2b能够推出P2a，同理也能够推出P2。</p>
+<p>要去探索如何才能满足P2b，我们先来证明如何才能保持这个条件，假设提议编号为m提议值为v的提议被选中，证明编号为n的提议的提议值也为v（n&gt;m），通过对n进行归纳法进行证明：假设提议编号m，m+1,…,n-1的提议都是v，由于提议编号为m的序号被选中，一定有一个接受者多数派集合C接受了这个提议值v，根据归纳假设，每一个C里的接受者也都接受了序号为m,…,n-1序号的提议，每一个被接受的值也为v。</p>
+<p>由于任何一个多数派集合至少有一个是C里的元素，通过维持下述的不变形来证明编号为n的提议值为v</p>
+<blockquote>
+<p>P2c 对于任何一个v和n，一个编号为n值为v的提议发出必须有一个多数派集合S满足下面两个条件之一（a）S中没有一个接受者接受过编号小于n的提议（b）v是S中的接受者接受的小于n的最大的编号的提议值v</p>
+</blockquote>
+<p>论文中这里没有讲证明，维基百科里面的证明比较简洁明了：</p>
+<blockquote>
+<p>假设具有value v的提案m获得批准，当n=m+1时，采用反证法，假如提案n不具有value v，而是具有value w，根据P2c，则存在一个多数派S1，要么他们中没有人接受过编号小于n的任何提案，要么他们已经接受的所有编号小于n的提案中编号最大的那个提案是value w。由于S1和通过提案m时的多数派C之间至少有一个公共的acceptor，所以以上两个条件都不成立，导出矛盾从而推翻假设，证明了提案n必须具有value v；若（m+1）..（N-1）所有提案都具有value v，采用反证法，假如新提案N不具有value v，而是具有value w’,根据P2c，则存在一个多数派S2，要么他们没有接受过m..（N-1）中的任何提案，要么他们已经接受的所有编号小于N的提案中编号最大的那个提案是value w’。由于S2和通过m的多数派C之间至少有一个公共的acceptor，所以至少有一个acceptor曾经接受了m，从而也可以推出S2中已接受的所有编号小于n的提案中编号最大的那个提案的编号范围在m..（N-1）之间，而根据初始假设，m..（N-1）之间的所有提案都具有value v，所以S2中已接受的所有编号小于n的提案中编号最大的那个提案肯定具有value v，导出矛盾从而推翻新提案n不具有value v的假设。根据数学归纳法，我们证明了若满足P2c，则P2b一定满足。</p>
+</blockquote>
+<p>P2c是可以通过消息传递模型实现的。另外，引入了P2c后，也解决了前文提到的P1不完备的问题。</p>
+<p>为了保证P2c的不变形，一个提议编号为n的提议者必须要学校到小于n的编号里面最大的编号的提议值v，要学习到已经选择的提议的最大编号是容易的，但是要预测未来编号的提议是困难的，为了避免预测未来的值，提议者希望获取接受者的承诺，即不再接受提议者编号小于n的提议。由此引出提议者的提议过程<br>1、提议者提出一个新的提议编号n，发送给所有的接受者，要求接受者回复：<br>(a)一个不再接受提议编号小于n的提议的承诺<br>(b)如果有小于n的最大的提议编号的提议，则回复这个提议<br>这个过程称为对于第一编号n的prepare请求</p>
+<p>2、如果提议者收到超过半数的接受者的回复，那么他可以发出编号为n，值为收到的所有这些接受者返回的最大的提议编号的提议，如果没有提议，提出自己的提议值。</p>
+<p>提议者只需要发给接受了这个提议的接受者无需发给所有的接受者，这个被称为accept请求</p>
+<p>这里描述了提议者的算法，接受者算法接受两种类型的请求：prepare和accept。<br>P1a 接受者能够接受编号为n的提议，当且仅当它没有承诺过编号大于n的prepare请求</p>
+<p>算法描述其实已经结束，最后的算法加入一个优化：<br>如果acceptor已经承诺过编号大于n的提议，则不回复提议编号为n的prepare请求，同样也不理会已经accept的prepare请求。所以acceptor只需要记录已经accept的最大编号以及已经承诺的最大prepare请求的提议编号</p>
+<h2 id="paxos两阶段过程"><a href="#paxos两阶段过程" class="headerlink" title="paxos两阶段过程"></a>paxos两阶段过程</h2><p>第一阶段<br>(a)提议者选择一个提议编号n发给多数派接受者<br>(b)如果接受者接受到的prepare请求的编号大于它已经接收到的最大的编号，则回复这个请求承诺不接受比这个编号小的提议，以及如果已经接受过提议则回复接受过的编号最大的提议值value</p>
+<p>第二阶段<br>(a)如果提议者收到多数接受者接受的prepare请求，则向这些接受者发送accept请求，选择接受者发送的最大编号的提议值或者如果没有提议值则选择自己的提议值。<br>(b)接受者收到accept请求，接受这个提议除非它又承诺了编号大于这个请求编号的prepare请求。</p>
+<p>如果一个提议者放弃一个提议，这并不会影响正确性，所以如果一个接受者明确告诉提议者它收到了一个更大编号的提议，那么提议者主动放弃将会是一个性能优化措施。</p>
+
+      
+    </div>
+
+    <div>
+      
+        
+
+      
+    </div>
+
+    <div>
+      
+        
+
+      
+    </div>
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/blog/tags/经典论文/" rel="tag">#经典论文</a>
+          
+        </div>
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/blog/2016/09/13/bigtable详解/" rel="next" title="bigtable详解">
+                <i class="fa fa-chevron-left"></i> bigtable详解
+              </a>
+            
+          </div>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+  <div class="comments" id="comments">
+    
+  </div>
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview sidebar-panel ">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+          <img class="site-author-image" itemprop="image"
+               src="/blog/images/tangbao.jpg"
+               alt="houfang" />
+          <p class="site-author-name" itemprop="name">houfang</p>
+          <p class="site-description motion-element" itemprop="description"></p>
+        </div>
+        <nav class="site-state motion-element">
+          <div class="site-state-item site-state-posts">
+            <a href="/blog/archives">
+              <span class="site-state-item-count">4</span>
+              <span class="site-state-item-name">日志</span>
+            </a>
+          </div>
+
+          
+            <div class="site-state-item site-state-categories">
+              
+                <span class="site-state-item-count">1</span>
+                <span class="site-state-item-name">分类</span>
+              
+            </div>
+          
+
+          
+            <div class="site-state-item site-state-tags">
+              <a href="/blog/tags">
+                <span class="site-state-item-count">1</span>
+                <span class="site-state-item-name">标签</span>
+              </a>
+            </div>
+          
+
+        </nav>
+
+        
+
+        <div class="links-of-author motion-element">
+          
+        </div>
+
+        
+        
+
+        
+        
+
+      </section>
+
+      
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+            
+              
+            
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#一致性算法"><span class="nav-number">1.</span> <span class="nav-text">一致性算法</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#问题描述"><span class="nav-number">1.1.</span> <span class="nav-text">问题描述</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#选择一个值"><span class="nav-number">1.2.</span> <span class="nav-text">选择一个值</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#paxos两阶段过程"><span class="nav-number">2.</span> <span class="nav-text">paxos两阶段过程</span></a></li></ol></div>
+            
+          </div>
+        </section>
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright" >
+  
+  &copy; 
+  <span itemprop="copyrightYear">2016</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">houfang</span>
+</div>
+
+<div class="powered-by">
+  由 <a class="theme-link" href="https://hexo.io">Hexo</a> 强力驱动
+</div>
+
+<div class="theme-info">
+  主题 -
+  <a class="theme-link" href="https://github.com/iissnan/hexo-theme-next">
+    NexT.Muse
+  </a>
+</div>
+
+        
+
+        
+      </div>
+    </footer>
+
+    <div class="back-to-top">
+      <i class="fa fa-arrow-up"></i>
+    </div>
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+  
+  <script type="text/javascript" src="/blog/vendors/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script type="text/javascript" src="/blog/vendors/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+
+  
+  <script type="text/javascript" src="/blog/vendors/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+
+  
+  <script type="text/javascript" src="/blog/vendors/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script type="text/javascript" src="/blog/vendors/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+  
+  <script type="text/javascript" src="/blog/vendors/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+
+
+  
+
+
+  <script type="text/javascript" src="/blog/js/src/utils.js?v=5.0.1"></script>
+
+  <script type="text/javascript" src="/blog/js/src/motion.js?v=5.0.1"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/blog/js/src/scrollspy.js?v=5.0.1"></script>
+<script type="text/javascript" src="/blog/js/src/post-details.js?v=5.0.1"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/blog/js/src/bootstrap.js?v=5.0.1"></script><!-- hexo-inject:begin --><!-- hexo-inject:end -->
+
+
+
+  
+
+
+
+  
+
+
+
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>
